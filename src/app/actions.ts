@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { currentUser, facility } from "@/lib/data";
-import { MOTHER_SLUG, concernSymptoms, symptoms } from "@/lib/mother-data";
+import * as repo from "@/db/repo";
 import { classifyReading, screenForHypertension } from "@/lib/screening";
-import { getDb, mutate, nextPatientId, slugify } from "@/lib/store";
+import { getDb } from "@/lib/store";
+import { MOTHER_SLUG, concernSymptoms, symptoms } from "@/lib/mother-data";
 import type { ActionState } from "@/lib/action-state";
 import type { Patient, Reading } from "@/lib/types";
 
@@ -40,7 +41,7 @@ export async function createPatient(_prev: ActionState, formData: FormData): Pro
   if (db.patients.some((patient) => patient.name.toLowerCase() === name.toLowerCase()))
     return { status: "error", message: "A patient with that name is already registered." };
 
-  let slug = slugify(name);
+  let slug = repo.slugify(name);
   if (db.patients.some((patient) => patient.slug === slug)) slug = `${slug}-${Date.now().toString().slice(-4)}`;
 
   const readings: Reading[] =
@@ -49,7 +50,7 @@ export async function createPatient(_prev: ActionState, formData: FormData): Pro
       : [];
 
   const patient: Patient = {
-    id: nextPatientId(db),
+    id: repo.nextPatientId(db.patients),
     slug,
     name,
     age,
@@ -75,15 +76,13 @@ export async function createPatient(_prev: ActionState, formData: FormData): Pro
     notes: [],
   };
 
-  await mutate((draft) => {
-    draft.patients.unshift(patient);
-    draft.activities.unshift({
-      id: `act-${Date.now()}`,
-      at: nowIso(),
-      actor: currentUser.name,
-      action: "New patient registered",
-      subject: patient.name,
-    });
+  await repo.insertPatient(patient);
+  await repo.insertActivity({
+    id: `act-${Date.now()}`,
+    at: nowIso(),
+    actor: currentUser.name,
+    action: "New patient registered",
+    subject: patient.name,
   });
 
   refresh(`/patients/${patient.slug}`);
@@ -108,24 +107,22 @@ export async function scheduleAppointment(_prev: ActionState, formData: FormData
   const patient = db.patients.find((entry) => entry.id === patientId);
   if (!patient) return { status: "error", message: "That patient is no longer registered." };
 
-  await mutate((draft) => {
-    draft.appointments.push({
-      id: `apt-${Date.now()}`,
-      patientId: patient.id,
-      patientName: patient.name,
-      reason,
-      at: at.toISOString(),
-      clinicianId,
-      state: "upcoming",
-      location: "Antenatal clinic · Room 1",
-    });
-    draft.activities.unshift({
-      id: `act-${Date.now()}`,
-      at: nowIso(),
-      actor: currentUser.name,
-      action: "Appointment scheduled",
-      subject: patient.name,
-    });
+  await repo.insertAppointment({
+    id: `apt-${Date.now()}`,
+    patientId: patient.id,
+    patientName: patient.name,
+    reason,
+    at: at.toISOString(),
+    clinicianId,
+    state: "upcoming",
+    location: "Antenatal clinic · Room 1",
+  });
+  await repo.insertActivity({
+    id: `act-${Date.now()}`,
+    at: nowIso(),
+    actor: currentUser.name,
+    action: "Appointment scheduled",
+    subject: patient.name,
   });
 
   refresh(`/patients/${patient.slug}`);
@@ -137,22 +134,20 @@ export async function acknowledgeAlert(formData: FormData) {
   const id = String(formData.get("alertId") ?? "");
   if (!id) return;
 
-  await mutate((draft) => {
-    const alert = draft.alerts.find((entry) => entry.id === id);
-    if (!alert) return;
-    alert.acknowledged = true;
-    alert.assignedTo = currentUser.id;
-    draft.notifications = draft.notifications.map((notification) =>
-      notification.id === `nt-${alert.id}` ? { ...notification, read: true } : notification
-    );
-    draft.activities.unshift({
+  const db = await getDb();
+  const alert = db.alerts.find((entry) => entry.id === id);
+
+  await repo.acknowledgeAlertById(id, currentUser.id);
+  await repo.acknowledgeAssociatedNotifications(id);
+  if (alert) {
+    await repo.insertActivity({
       id: `act-${Date.now()}`,
       at: nowIso(),
       actor: currentUser.name,
       action: "Alert acknowledged",
       subject: alert.patientName,
     });
-  });
+  }
 
   refresh();
 }
@@ -169,36 +164,44 @@ export async function logReading(_prev: ActionState, formData: FormData): Promis
   if (diastolic >= systolic) return { status: "error", message: "Diastolic must be lower than systolic." };
 
   const severity = classifyReading(systolic, diastolic);
+  const db = await getDb();
+  const patient = db.patients.find((entry) => entry.id === patientId);
+  if (!patient) return { status: "error", message: "That patient is no longer registered." };
 
-  const slug = await mutate((draft) => {
-    const patient = draft.patients.find((entry) => entry.id === patientId);
-    if (!patient) return "";
-    patient.readings.push({ at: nowIso(), systolic, diastolic, source: "clinician", verified: true });
-    patient.lastCheckIn = nowIso();
-    const result = screenForHypertension(patient);
-    patient.status = result.severity;
-
-    if (severity !== "routine") {
-      draft.alerts.unshift({
-        id: `al-${Date.now()}`,
-        patientId: patient.id,
-        patientName: patient.name,
-        severity,
-        title:
-          severity === "urgent"
-            ? "Severe blood pressure reading recorded"
-            : "Raised blood pressure reading recorded",
-        detail: `Clinician-verified reading of ${systolic}/${diastolic} mmHg.`,
-        at: nowIso(),
-        assignedTo: null,
-        acknowledged: false,
-      });
-    }
-    return patient.slug;
+  await repo.insertReading(patientId, {
+    at: nowIso(),
+    systolic,
+    diastolic,
+    source: "clinician",
+    verified: true,
   });
 
+  const updated: Patient = {
+    ...patient,
+    lastCheckIn: nowIso(),
+    readings: [...patient.readings, { at: nowIso(), systolic, diastolic, source: "clinician", verified: true }],
+  };
+  const result = screenForHypertension(updated);
+
+  await repo.patchPatient(patientId, { status: result.severity, lastCheckIn: updated.lastCheckIn });
+
+  if (severity !== "routine") {
+    await repo.insertAlert({
+      id: `al-${Date.now()}`,
+      patientId: patient.id,
+      patientName: patient.name,
+      severity,
+      title:
+        severity === "urgent" ? "Severe blood pressure reading recorded" : "Raised blood pressure reading recorded",
+      detail: `Clinician-verified reading of ${systolic}/${diastolic} mmHg.`,
+      at: nowIso(),
+      assignedTo: null,
+      acknowledged: false,
+    });
+  }
+
   refresh();
-  if (slug) revalidatePath(`/patients/${slug}`);
+  revalidatePath(`/patients/${patient.slug}`);
   return {
     status: "success",
     message:
@@ -216,26 +219,20 @@ export async function addNote(_prev: ActionState, formData: FormData): Promise<A
   if (!patientId) return { status: "error", message: "Patient is required." };
   if (body.length < 4) return { status: "error", message: "Write a little more detail before saving." };
 
-  const slug = await mutate((draft) => {
-    const patient = draft.patients.find((entry) => entry.id === patientId);
-    if (!patient) return "";
-    patient.notes.unshift({
-      id: `n-${Date.now()}`,
-      at: nowIso(),
-      author: currentUser.name,
-      body,
-    });
-    draft.activities.unshift({
-      id: `act-${Date.now()}`,
-      at: nowIso(),
-      actor: currentUser.name,
-      action: "Note added",
-      subject: patient.name,
-    });
-    return patient.slug;
+  const db = await getDb();
+  const patient = db.patients.find((entry) => entry.id === patientId);
+  if (!patient) return { status: "error", message: "That patient is no longer registered." };
+
+  await repo.insertNote({ id: `n-${Date.now()}`, patientId, at: nowIso(), author: currentUser.name, body });
+  await repo.insertActivity({
+    id: `act-${Date.now()}`,
+    at: nowIso(),
+    actor: currentUser.name,
+    action: "Note added",
+    subject: patient.name,
   });
 
-  if (slug) revalidatePath(`/patients/${slug}`);
+  revalidatePath(`/patients/${patient.slug}`);
   return { status: "success", message: "Note saved." };
 }
 
@@ -245,14 +242,12 @@ export async function updateCarePlan(_prev: ActionState, formData: FormData): Pr
   if (!patientId) return { status: "error", message: "Patient is required." };
   if (plan.length < 8) return { status: "error", message: "The care plan needs a little more detail." };
 
-  const slug = await mutate((draft) => {
-    const patient = draft.patients.find((entry) => entry.id === patientId);
-    if (!patient) return "";
-    patient.carePlan = plan;
-    return patient.slug;
-  });
+  const db = await getDb();
+  const patient = db.patients.find((entry) => entry.id === patientId);
+  if (!patient) return { status: "error", message: "That patient is no longer registered." };
 
-  if (slug) revalidatePath(`/patients/${slug}`);
+  await repo.patchPatient(patientId, { carePlan: plan });
+  revalidatePath(`/patients/${patient.slug}`);
   return { status: "success", message: "Care plan updated." };
 }
 
@@ -266,26 +261,26 @@ export async function sendReferral(_prev: ActionState, formData: FormData): Prom
   if (destination.length < 3) return { status: "error", message: "Where is the patient being referred?" };
   if (reason.length < 8) return { status: "error", message: "Add a clinical reason for the referral." };
 
-  await mutate((draft) => {
-    const patient = draft.patients.find((entry) => entry.id === patientId);
-    if (!patient) return;
-    draft.referrals.unshift({
-      id: `r-${Date.now()}`,
-      patientId: patient.id,
-      patientName: patient.name,
-      destination,
-      reason,
-      at: nowIso(),
-      state: "in-progress",
-      urgency,
-    });
-    draft.activities.unshift({
-      id: `act-${Date.now()}`,
-      at: nowIso(),
-      actor: currentUser.name,
-      action: "Referral sent",
-      subject: patient.name,
-    });
+  const db = await getDb();
+  const patient = db.patients.find((entry) => entry.id === patientId);
+  if (!patient) return { status: "error", message: "That patient is no longer registered." };
+
+  await repo.insertReferral({
+    id: `r-${Date.now()}`,
+    patientId: patient.id,
+    patientName: patient.name,
+    destination,
+    reason,
+    at: nowIso(),
+    state: "in-progress",
+    urgency,
+  });
+  await repo.insertActivity({
+    id: `act-${Date.now()}`,
+    at: nowIso(),
+    actor: currentUser.name,
+    action: "Referral sent",
+    subject: patient.name,
   });
 
   revalidatePath("/referrals");
@@ -298,26 +293,24 @@ export async function resolveAccessRequest(formData: FormData) {
   const decision = String(formData.get("decision") ?? "");
   if (!id || !["granted", "declined"].includes(decision)) return;
 
-  await mutate((draft) => {
-    const request = draft.accessRequests.find((entry) => entry.id === id);
-    if (!request) return;
-    request.status = decision as "granted" | "declined";
-    draft.activities.unshift({
-      id: `act-${Date.now()}`,
-      at: nowIso(),
-      actor: currentUser.name,
-      action: decision === "granted" ? "Record access granted" : "Record access declined",
-      subject: request.patientName,
-    });
+  const db = await getDb();
+  const request = db.accessRequests.find((entry) => entry.id === id);
+  if (!request) return;
+
+  await repo.setAccessRequestStatus(id, decision as "granted" | "declined");
+  await repo.insertActivity({
+    id: `act-${Date.now()}`,
+    at: nowIso(),
+    actor: currentUser.name,
+    action: decision === "granted" ? "Record access granted" : "Record access declined",
+    subject: request.patientName,
   });
 
   revalidatePath("/mother-access");
 }
 
 export async function markNotificationsRead() {
-  await mutate((draft) => {
-    draft.notifications = draft.notifications.map((notification) => ({ ...notification, read: true }));
-  });
+  await repo.markNotificationsRead();
   revalidatePath("/notifications");
 }
 
@@ -332,48 +325,46 @@ export async function submitCheckIn(_prev: ActionState, formData: FormData): Pro
     return { status: "error", message: "Choose how today feels before sending." };
 
   const flagged = picked.filter((symptom) => concernSymptoms.includes(symptom));
+  const db = await getDb();
+  const patient = db.patients.find((entry) => entry.slug === MOTHER_SLUG) ?? db.patients[0];
 
-  await mutate((draft) => {
-    const patient = draft.patients.find((entry) => entry.slug === MOTHER_SLUG);
-    draft.checkIns.unshift({
-      id: `c-${Date.now()}`,
-      at: nowIso(),
-      feeling: feeling as "good" | "mixed" | "support",
-      symptoms: picked,
-      note,
-    });
-    if (patient) {
-      patient.lastCheckIn = nowIso();
-      if (flagged.length > 0) {
-        const labels = flagged
-          .map((id) => symptoms.find((symptom) => symptom.id === id)?.label.toLowerCase())
-          .filter(Boolean)
-          .join(" and ");
-        draft.alerts.unshift({
-          id: `al-${Date.now()}`,
-          patientId: patient.id,
-          patientName: patient.name,
-          severity: flagged.length > 1 ? "urgent" : "review",
-          title: `Check-in flagged: ${labels}`,
-          detail: note || `Reported ${labels} in today's check-in.`,
-          at: nowIso(),
-          assignedTo: null,
-          acknowledged: false,
-        });
-        draft.notifications.unshift({
-          id: `nt-${Date.now()}`,
-          at: nowIso(),
-          title: `Check-in alert · ${patient.name}`,
-          body: `Reported ${labels}. Review before the end of the day.`,
-          kind: "alert",
-          read: false,
-        });
-      }
-    }
+  await repo.insertCheckIn({
+    id: `c-${Date.now()}`,
+    at: nowIso(),
+    feeling: feeling as "good" | "mixed" | "support",
+    symptoms: picked,
+    note,
   });
+  await repo.patchPatient(patient.id, { lastCheckIn: nowIso() });
+
+  if (flagged.length > 0) {
+    const labels = flagged
+      .map((id) => symptoms.find((symptom) => symptom.id === id)?.label.toLowerCase())
+      .filter(Boolean)
+      .join(" and ");
+
+    await repo.insertAlert({
+      id: `al-${Date.now()}`,
+      patientId: patient.id,
+      patientName: patient.name,
+      severity: flagged.length > 1 ? "urgent" : "review",
+      title: `Check-in flagged: ${labels}`,
+      detail: note || `Reported ${labels} in today's check-in.`,
+      at: nowIso(),
+      assignedTo: null,
+      acknowledged: false,
+    });
+    await repo.insertNotification({
+      id: `nt-${Date.now()}`,
+      at: nowIso(),
+      title: `Check-in alert · ${patient.name}`,
+      body: `Reported ${labels}. Review before the end of the day.`,
+      kind: "alert",
+      read: false,
+    });
+  }
 
   refresh("/mother", "/mother/check-in", "/mother/records");
-  revalidatePath("/mother");
 
   return {
     status: "success",
@@ -390,16 +381,7 @@ export async function sendMotherMessage(_prev: ActionState, formData: FormData):
   if (!threadId) return { status: "error", message: "Choose someone to message." };
   if (body.length < 2) return { status: "error", message: "Write a message first." };
 
-  await mutate((draft) => {
-    draft.messages.push({
-      id: `m-${Date.now()}`,
-      threadId,
-      from: "mother",
-      body,
-      at: nowIso(),
-    });
-  });
-
+  await repo.insertMessage({ id: `m-${Date.now()}`, threadId, from: "mother", body, at: nowIso() });
   revalidatePath("/mother/messages");
   return { status: "success", message: "Message sent." };
 }
@@ -415,19 +397,17 @@ export async function saveMotherProfile(_prev: ActionState, formData: FormData):
   if (phone.replace(/\D/g, "").length < 7) return { status: "error", message: "Enter a phone number you can be reached on." };
   if (address.length < 5) return { status: "error", message: "Add your address so we can match your facility record." };
 
-  await mutate((draft) => {
-    draft.motherProfile = {
-      ...draft.motherProfile,
-      setupComplete: true,
-      name,
-      phone,
-      address,
-      nextOfKin,
-      consentShare,
-    };
-    const patient = draft.patients.find((entry) => entry.slug === MOTHER_SLUG);
-    if (patient) patient.phone = phone;
+  const db = await getDb();
+  await repo.saveMotherProfile({
+    ...db.motherProfile,
+    setupComplete: true,
+    name,
+    phone,
+    address,
+    nextOfKin,
+    consentShare,
   });
+  await repo.patchPatient(db.motherPatientId, { phone });
 
   revalidatePath("/mother");
   revalidatePath("/mother/profile");
@@ -437,9 +417,6 @@ export async function saveMotherProfile(_prev: ActionState, formData: FormData):
 export async function markThreadRead(formData: FormData) {
   const threadId = String(formData.get("threadId") ?? "");
   if (!threadId) return;
-  await mutate((draft) => {
-    const thread = draft.threads.find((entry) => entry.id === threadId);
-    if (thread) thread.unread = 0;
-  });
+  await repo.setThreadRead(threadId);
   revalidatePath("/mother/messages");
 }
