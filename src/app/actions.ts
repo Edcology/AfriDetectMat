@@ -312,6 +312,7 @@ export async function resolveAccessRequest(formData: FormData) {
 export async function markNotificationsRead() {
   await repo.markNotificationsRead();
   revalidatePath("/notifications");
+  revalidatePath("/mother/notifications");
 }
 
 /* ---------------------------------------------------------------- mother view */
@@ -419,4 +420,33 @@ export async function markThreadRead(formData: FormData) {
   if (!threadId) return;
   await repo.setThreadRead(threadId);
   revalidatePath("/mother/messages");
+}
+
+/** Care-team reply from the clinic inbox. */
+export async function sendCareMessage(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const threadId = String(formData.get("threadId") ?? "");
+  const body = String(formData.get("body") ?? "").trim();
+  if (!threadId) return { status: "error", message: "Choose someone to message." };
+  if (body.length < 2) return { status: "error", message: "Write a message first." };
+
+  await repo.insertMessage({
+    id: `m-${Date.now()}`,
+    threadId,
+    from: "care",
+    body,
+    at: nowIso(),
+  });
+  await repo.insertNotification({
+    id: `nt-${Date.now()}`,
+    at: nowIso(),
+    title: "New message from your care team",
+    body,
+    kind: "message",
+    read: false,
+  });
+
+  revalidatePath("/messages");
+  revalidatePath("/mother/messages");
+  revalidatePath("/mother/notifications");
+  return { status: "success", message: "Reply sent." };
 }

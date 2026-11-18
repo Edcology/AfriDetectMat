@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { authenticate, type AuthFormState } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,13 @@ const initial: AuthFormState = {};
 export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
   const [state, formAction, pending] = useActionState(authenticate, initial);
   const isSignup = mode === "signup";
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!state.ok) return;
+    router.replace("/");
+    router.refresh();
+  }, [state.ok, router]);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">

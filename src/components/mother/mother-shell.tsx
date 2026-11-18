@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   BookOpen,
   CalendarDays,
@@ -100,10 +100,18 @@ function MotherTopbar({
   profileName,
   unread,
   onOpenMenu,
+  textScale,
+  onCycleTextSize,
+  speaking,
+  onToggleRead,
 }: {
   profileName: string;
   unread: number;
   onOpenMenu: () => void;
+  textScale: number;
+  onCycleTextSize: () => void;
+  speaking: boolean;
+  onToggleRead: () => void;
 }) {
   return (
     <header className="flex h-[86px] items-center justify-end gap-5 border-b border-line bg-white px-4 sm:px-6 lg:px-8">
@@ -126,20 +134,27 @@ function MotherTopbar({
 
       <button
         type="button"
-        aria-label="Increase text size"
-        className="focus-ring hidden size-9 place-items-center rounded-[12px] border border-line text-ink-soft sm:grid"
+        onClick={onCycleTextSize}
+        aria-label={`Text size ${Math.round(textScale * 100)} percent`}
+        title="Change text size"
+        className="focus-ring hidden size-9 place-items-center rounded-[12px] border border-line text-ink-soft hover:text-ink sm:grid"
       >
         <Type size={16} />
       </button>
       <button
         type="button"
-        aria-label="Read aloud"
-        className="focus-ring hidden size-9 place-items-center rounded-[12px] border border-line text-ink-soft sm:grid"
+        onClick={onToggleRead}
+        aria-pressed={speaking}
+        aria-label={speaking ? "Stop reading aloud" : "Read this page aloud"}
+        title={speaking ? "Stop reading" : "Read aloud"}
+        className={`focus-ring hidden size-9 place-items-center rounded-[12px] border text-ink-soft hover:text-ink sm:grid ${
+          speaking ? "border-brand-accent bg-brand-mist text-brand-deep" : "border-line"
+        }`}
       >
         <Volume2 size={16} />
       </button>
       <Link
-        href="/mother/messages"
+        href="/mother/notifications"
         aria-label="Notifications"
         className="focus-ring relative grid size-9 place-items-center rounded-[12px] border border-line-soft text-ink-soft"
       >
@@ -180,6 +195,40 @@ export function MotherShell({
   unread: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [textScale, setTextScale] = useState(1);
+  const [speaking, setSpeaking] = useState(false);
+
+  useEffect(() => {
+    const saved = Number(localStorage.getItem("ad:text-scale") ?? "1");
+    if (Number.isFinite(saved) && saved >= 1 && saved <= 1.5) setTextScale(saved);
+  }, []);
+
+  const cycleTextSize = () => {
+    const next = textScale >= 1.25 ? 1 : Math.round((textScale + 0.125) * 1000) / 1000;
+    setTextScale(next);
+    localStorage.setItem("ad:text-scale", String(next));
+  };
+
+  const toggleRead = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const synth = window.speechSynthesis;
+
+    if (speaking) {
+      synth.cancel();
+      setSpeaking(false);
+      return;
+    }
+
+    const text = document.querySelector("main")?.innerText?.trim();
+    if (!text) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    synth.speak(utterance);
+    setSpeaking(true);
+  };
 
   return (
     <div className="flex min-h-dvh bg-canvas">
@@ -210,8 +259,18 @@ export function MotherShell({
       ) : null}
 
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
-        <MotherTopbar profileName={profileName} unread={unread} onOpenMenu={() => setOpen(true)} />
-        <main className="min-w-0 flex-1 px-4 pt-8 pb-16 sm:px-6 lg:px-8">{children}</main>
+        <MotherTopbar
+          profileName={profileName}
+          unread={unread}
+          onOpenMenu={() => setOpen(true)}
+          textScale={textScale}
+          onCycleTextSize={cycleTextSize}
+          speaking={speaking}
+          onToggleRead={toggleRead}
+        />
+        <main className="min-w-0 flex-1 px-4 pt-8 pb-16 sm:px-6 lg:px-8" style={{ zoom: textScale }}>
+          {children}
+        </main>
       </div>
     </div>
   );

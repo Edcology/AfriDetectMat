@@ -117,7 +117,7 @@ export function Topbar({
       </div>
 
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
-        <IconLink href="/notifications" label="Messages" className="hidden sm:grid">
+        <IconLink href="/messages" label="Messages" className="hidden sm:grid">
           <MessageSquare size={18} strokeWidth={1.6} />
         </IconLink>
         <IconLink href="/reports" label="Announcements" className="hidden md:grid">

@@ -1,10 +1,10 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/server";
 
 export interface AuthFormState {
   error?: string;
+  ok?: boolean;
 }
 
 /**
@@ -35,5 +35,9 @@ export async function authenticate(_prev: AuthFormState, formData: FormData): Pr
     if (error) return { error: "Those details did not match an account." };
   }
 
-  redirect("/");
+  // Return success rather than redirecting: the session cookies must be
+  // committed before the browser navigates, otherwise the clinic layout can
+  // evaluate getSession against the previous (cookie-less) request and bounce
+  // straight back to /login.
+  return { ok: true };
 }
