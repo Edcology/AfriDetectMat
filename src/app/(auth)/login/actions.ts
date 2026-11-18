@@ -7,30 +7,33 @@ export interface AuthFormState {
   error?: string;
 }
 
-export async function signIn(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
+/**
+ * One action for both forms, branching on a hidden `intent`. Binding a single
+ * action avoids the `useActionState` footgun where a reused component keeps the
+ * action it mounted with after a client-side navigation between ?mode=signup
+ * and /login.
+ */
+export async function authenticate(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const intent = String(formData.get("intent") ?? "signin");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-
-  if (!email || !password) return { error: "Enter your email and password." };
-
-  const { error } = await auth.signIn.email({ email, password });
-  if (error) return { error: "Those details did not match an account." };
-
-  redirect("/");
-}
-
-export async function signUp(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
 
-  if (!email || !name || !password) return { error: "Fill in every field." };
-  if (password.length < 10) return { error: "Use at least 10 characters." };
-  if (!email.endsWith("@harbour.health"))
-    return { error: "Clinician accounts must use a @harbour.health address." };
+  if (!email) return { error: "Enter your work email." };
+  if (!password) return { error: "Enter your password." };
 
-  const { error } = await auth.signUp.email({ email, name, password });
-  if (error) return { error: error.message || "Could not create the account." };
+  if (intent === "signup") {
+    if (!name) return { error: "Enter your full name." };
+    if (password.length < 10) return { error: "Use a password of at least 10 characters." };
+    if (!email.endsWith("@harbour.health"))
+      return { error: "Clinician accounts must use a @harbour.health address." };
+
+    const { error } = await auth.signUp.email({ email, name, password });
+    if (error) return { error: error.message || "Could not create the account." };
+  } else {
+    const { error } = await auth.signIn.email({ email, password });
+    if (error) return { error: "Those details did not match an account." };
+  }
 
   redirect("/");
 }

@@ -3,18 +3,20 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { AlertCircle } from "lucide-react";
-import { signIn, signUp, type AuthFormState } from "./actions";
+import { authenticate, type AuthFormState } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
 
 const initial: AuthFormState = {};
 
 export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
-  const [state, formAction, pending] = useActionState(mode === "signin" ? signIn : signUp, initial);
+  const [state, formAction, pending] = useActionState(authenticate, initial);
   const isSignup = mode === "signup";
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="intent" value={isSignup ? "signup" : "signin"} />
+
       {isSignup ? (
         <Field label="Full name" htmlFor="name">
           <Input id="name" name="name" autoComplete="name" placeholder="Dr. Adika Nwosu" required />
@@ -39,7 +41,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
           name="password"
           type="password"
           autoComplete={isSignup ? "new-password" : "current-password"}
-          placeholder="••••••••••"
+          placeholder="Enter your password"
           required
         />
       </Field>

@@ -38,7 +38,7 @@ export default async function LoginPage({
           </p>
 
           <div className="mt-8">
-            <AuthForm mode={isSignup ? "signup" : "signin"} />
+            <AuthForm key={mode ?? "signin"} mode={isSignup ? "signup" : "signin"} />
           </div>
 
           <p className="mt-6 flex items-center gap-2 text-[12px] text-muted">
