@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, HeartHandshake, PlayCircle, UserRound } from "lucide-react";
+import { ArrowRight, ArrowUpRight, HeartHandshake, UserRound } from "lucide-react";
+import { SpeakButton } from "@/components/mother/actions-ui";
 import { MotherHeader } from "@/components/mother/ui";
 import { clinicians, clinicianName } from "@/lib/data";
 import { clock, dayTime, greeting, relativeDay, stamp } from "@/lib/format";
@@ -182,12 +183,15 @@ export default async function MotherHomePage() {
               >
                 See all your readings
               </Link>
-              <button
-                type="button"
-                className="inline-flex h-[33px] items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] text-ink-soft hover:text-ink"
-              >
-                <PlayCircle size={14} /> Listen
-              </button>
+              <SpeakButton
+                text={`Your latest blood pressure is ${
+                  latest ? `${latest.systolic} over ${latest.diastolic}` : "not recorded yet"
+                }. Your last readings were between ${Math.min(
+                  ...patient.readings.map((reading) => reading.systolic)
+                )} and ${Math.max(
+                  ...patient.readings.map((reading) => reading.systolic)
+                )}. Your care team reviews each one.`}
+              />
             </div>
           </div>
         </div>
@@ -223,12 +227,13 @@ export default async function MotherHomePage() {
                   >
                     Ask to reschedule
                   </Link>
-                  <button
-                    type="button"
-                    className="inline-flex h-[33px] items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] text-ink-soft hover:text-ink"
-                  >
-                    <PlayCircle size={14} /> Listen
-                  </button>
+                  <SpeakButton
+                    text={
+                      nextVisit
+                        ? `${dayTime(new Date(nextVisit.at))}, ${nextVisit.reason} at Harbour Health Centre with ${clinicianName(nextVisit.clinicianId)}.`
+                        : "No visit is booked. Message your care team to arrange one."
+                    }
+                  />
                 </div>
               </>
             ) : (

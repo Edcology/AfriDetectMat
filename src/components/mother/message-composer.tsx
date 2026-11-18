@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
-import { Paperclip } from "lucide-react";
+import { Send } from "lucide-react";
 import { sendMotherMessage } from "@/app/actions";
 import { idleState } from "@/lib/action-state";
 
@@ -16,14 +16,8 @@ export function MessageComposer({ threadId }: { threadId: string }) {
   return (
     <form ref={formRef} action={formAction} className="flex items-center gap-3 border-t border-line-soft px-5 py-4">
       <input type="hidden" name="threadId" value={threadId} />
-      <button
-        type="button"
-        aria-label="Attach a file"
-        className="focus-ring grid size-9 shrink-0 place-items-center rounded-[10px] border border-line text-ink-soft"
-      >
-        <Paperclip size={15} />
-      </button>
       <input
+        id="composer-input"
         name="body"
         placeholder="Write a message"
         aria-label="Write a message"

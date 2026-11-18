@@ -33,15 +33,24 @@ const stateTone = {
 export default async function AppointmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; day?: string }>;
+  searchParams: Promise<{ view?: string; day?: string; month?: string }>;
 }) {
   const params = await searchParams;
   const view = params.view ?? "calendar";
   const db = await getDb();
-  const monthDate = TODAY;
+
+  const [year, month] = (params.month ?? "").split("-").map(Number);
+  const validMonth = Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12;
+  const monthDate = validMonth ? new Date(year, month - 1, 1) : TODAY;
+  const shiftMonth = (delta: number) => {
+    const next = new Date(monthDate.getFullYear(), monthDate.getMonth() + delta, 1);
+    return `/appointments?month=${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
+  };
   const cells = monthMatrix(monthDate.getFullYear(), monthDate.getMonth());
 
-  const selectedDay = params.day ? Number(params.day) : TODAY.getDate();
+  const viewingThisMonth =
+    monthDate.getFullYear() === TODAY.getFullYear() && monthDate.getMonth() === TODAY.getMonth();
+  const selectedDay = params.day ? Number(params.day) : viewingThisMonth ? TODAY.getDate() : -1;
   const selectedDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), selectedDay);
   const dayAppointments = db.appointments
     .filter((appointment) => isSameDay(new Date(appointment.at), selectedDate))
@@ -89,12 +98,20 @@ export default async function AppointmentsPage({
               <div className="flex items-center justify-between">
                 <span className="text-[13px] font-medium text-ink">{monthTitle(monthDate)}</span>
                 <div className="flex items-center gap-1 text-ink-soft">
-                  <span className="grid size-6 place-items-center rounded-[6px] hover:bg-surface-muted">
+                  <Link
+                    href={shiftMonth(-1)}
+                    aria-label="Previous month"
+                    className="grid size-6 place-items-center rounded-[6px] hover:bg-surface-muted"
+                  >
                     <ChevronLeft size={14} />
-                  </span>
-                  <span className="grid size-6 place-items-center rounded-[6px] hover:bg-surface-muted">
+                  </Link>
+                  <Link
+                    href={shiftMonth(1)}
+                    aria-label="Next month"
+                    className="grid size-6 place-items-center rounded-[6px] hover:bg-surface-muted"
+                  >
                     <ChevronRight size={14} />
-                  </span>
+                  </Link>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-7 gap-y-2 text-center">
@@ -182,12 +199,20 @@ export default async function AppointmentsPage({
               <div className="flex items-center gap-3">
                 <span className="text-[16px] font-medium text-ink">{monthTitle(monthDate)}</span>
                 <span className="ml-1 inline-flex items-center gap-1 text-ink-soft">
-                  <span className="grid size-7 place-items-center rounded-[6px] border border-line-soft">
+                  <Link
+                    href={shiftMonth(-1)}
+                    aria-label="Previous month"
+                    className="grid size-7 place-items-center rounded-[6px] border border-line-soft"
+                  >
                     <ChevronLeft size={14} />
-                  </span>
-                  <span className="grid size-7 place-items-center rounded-[6px] border border-line-soft">
+                  </Link>
+                  <Link
+                    href={shiftMonth(1)}
+                    aria-label="Next month"
+                    className="grid size-7 place-items-center rounded-[6px] border border-line-soft"
+                  >
                     <ChevronRight size={14} />
-                  </span>
+                  </Link>
                 </span>
                 <Link
                   href="/appointments"

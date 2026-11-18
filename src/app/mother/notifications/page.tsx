@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BellRing, CalendarDays, ClipboardList, MessageSquare } from "lucide-react";
+import { markNotificationsRead } from "@/app/actions";
 import { MotherHeader } from "@/components/mother/ui";
 import { clock, relativeDay } from "@/lib/format";
 import { getDb } from "@/lib/store";
@@ -25,6 +26,18 @@ export default async function MotherNotificationsPage() {
       <MotherHeader
         title="Notifications"
         subtitle={unread > 0 ? `${unread} new since your last visit` : "You're up to date"}
+        actions={
+          unread > 0 ? (
+            <form action={markNotificationsRead}>
+              <button
+                type="submit"
+                className="inline-flex h-[42px] items-center rounded-[8px] border border-line bg-white px-4 text-[14px] text-ink-soft hover:text-ink"
+              >
+                Mark all read
+              </button>
+            </form>
+          ) : null
+        }
       />
 
       <div className="overflow-hidden rounded-[16px] border border-line bg-white">

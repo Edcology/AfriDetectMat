@@ -8,7 +8,6 @@ import {
   CalendarDays,
   HeartHandshake,
   Home,
-  LogOut,
   Menu,
   MessageSquare,
   ScrollText,
@@ -164,13 +163,6 @@ function MotherTopbar({
             {unread}
           </span>
         ) : null}
-      </Link>
-      <Link
-        href="/"
-        aria-label="Sign out of the mother app"
-        className="focus-ring hidden size-9 place-items-center rounded-[12px] border border-line text-ink-soft sm:grid"
-      >
-        <LogOut size={16} strokeWidth={1.7} />
       </Link>
 
       <Link

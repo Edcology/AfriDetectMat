@@ -140,12 +140,13 @@ export default async function RecordsPage({
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
+              <a
+                href={`/api/mother/record?doc=${encodeURIComponent(document.name)}`}
+                download
                 className="inline-flex h-[33px] items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] text-ink-soft hover:text-ink"
               >
                 <Download size={14} /> Download
-              </button>
+              </a>
             </div>
           ))}
         </div>

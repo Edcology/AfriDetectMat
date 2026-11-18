@@ -8,7 +8,13 @@ import { getDb } from "@/lib/store";
 
 export const metadata = { title: "Screening & AI" };
 
-export default async function ScreeningPage() {
+export default async function ScreeningPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ protocol?: string }>;
+}) {
+  const { protocol: selected = "hypertension" } = await searchParams;
+  const glucoseActive = selected === "glucose";
   const db = await getDb();
 
   const rows = db.patients
@@ -30,13 +36,17 @@ export default async function ScreeningPage() {
         title="Clinical screening & AI"
         subtitle={
           <span className="inline-flex rounded-pill bg-brand-mist px-3 py-2 text-[13px] leading-[16px] text-brand-deep">
-            {protocol.name} · two readings at least 4 hours apart
+            {glucoseActive ? glucoseProtocol.headline : protocol.name} ·{" "}
+            {glucoseActive ? "one criterion meets the diagnosis" : "two readings at least 4 hours apart"}
           </span>
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-card border border-line bg-white px-6 py-5">
+      <div className="grid gap-4 xl:grid-cols-2 [&>*]:order-2">
+        <div
+          data-active={!glucoseActive}
+          className="rounded-card border border-line bg-white px-6 py-5 data-[active=true]:order-1"
+        >
           <h2 className="text-[20px] leading-[25px] font-semibold tracking-[-0.2px] text-ink">Hypertension in pregnancy</h2>
           <ul className="mt-4 flex flex-col gap-2">
             {protocol.rules.map((rule) => (
@@ -46,15 +56,18 @@ export default async function ScreeningPage() {
               </li>
             ))}
           </ul>
-          <button
-            type="button"
+          <Link
+            href={glucoseActive ? "/screening" : "/screening?protocol=glucose"}
             className="mt-5 inline-flex h-[42px] items-center rounded-[8px] border border-line bg-white px-6 text-[14px] font-medium text-ink-soft hover:text-ink"
           >
-            Change protocol
-          </button>
+            {glucoseActive ? "Switch to hypertension protocol" : "Switch to diabetes protocol"}
+          </Link>
         </div>
 
-        <div className="rounded-card border border-line bg-white px-6 py-5">
+        <div
+          data-active={glucoseActive}
+          className="rounded-card border border-line bg-white px-6 py-5 data-[active=true]:order-1"
+        >
           <h2 className="text-[20px] leading-[25px] font-semibold tracking-[-0.2px] text-ink">{glucoseProtocol.headline}</h2>
           <ul className="mt-4 flex flex-col gap-2">
             {glucoseProtocol.rules.map((rule) => (

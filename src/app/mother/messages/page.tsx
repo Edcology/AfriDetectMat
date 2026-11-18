@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HeartHandshake, Plus } from "lucide-react";
+import { FocusComposerButton } from "@/components/mother/actions-ui";
 import { MessageComposer } from "@/components/mother/message-composer";
 import { MotherHeader } from "@/components/mother/ui";
 import { Avatar } from "@/components/ui/avatar";
@@ -30,12 +31,9 @@ export default async function MotherMessagesPage({
         title="Messages"
         subtitle="Talk to your care team, or ask a question"
         actions={
-          <Link
-            href="/mother/messages"
-            className="inline-flex h-[42px] items-center gap-2 rounded-[8px] bg-brand px-4 text-[14px] font-medium text-white hover:bg-[#093f3b]"
-          >
+          <FocusComposerButton>
             <Plus size={16} /> New message
-          </Link>
+          </FocusComposerButton>
         }
       />
 
@@ -43,7 +41,7 @@ export default async function MotherMessagesPage({
         active="My care team"
         items={[
           { href: "/mother/messages", label: "My care team", count: unread },
-          { href: "/mother/check-in", label: "Ask maternal care" },
+          { href: "/mother/messages", label: "Ask a question" },
         ]}
       />
 

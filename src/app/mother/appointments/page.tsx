@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { CalendarDays, MapPin, PlayCircle, UserRound } from "lucide-react";
+import { CalendarDays, MapPin, UserRound } from "lucide-react";
+import { SpeakButton } from "@/components/mother/actions-ui";
 import { MotherHeader } from "@/components/mother/ui";
 import { clinicianName } from "@/lib/data";
 import { clock, dayTime, relativeDay, TODAY } from "@/lib/format";
@@ -67,12 +68,9 @@ export default async function MotherAppointmentsPage() {
                     >
                       Ask to reschedule
                     </Link>
-                    <button
-                      type="button"
-                      className="inline-flex h-[33px] items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] text-ink-soft hover:text-ink"
-                    >
-                      <PlayCircle size={13} /> Listen
-                    </button>
+                    <SpeakButton
+                      text={`${dayTime(date)}, ${appointment.reason}, at ${appointment.location} with ${clinicianName(appointment.clinicianId)}.`}
+                    />
                   </div>
                 </div>
               );
