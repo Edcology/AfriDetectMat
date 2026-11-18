@@ -1,5 +1,5 @@
-import { addDays } from "@/lib/format";
-import type { CheckIn, ChatMessage, Lesson, Thread } from "@/lib/mother-types";
+import { addDays } from "./format.ts";
+import type { CheckIn, ChatMessage, Lesson, Thread } from "./mother-types.ts";
 
 export const MOTHER_SLUG = "amara-okafor";
 

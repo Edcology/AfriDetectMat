@@ -1,4 +1,4 @@
-import { addDays, clock, isSameDay, TODAY } from "@/lib/format";
+import { addDays, clock, isSameDay, TODAY } from "./format.ts";
 import type {
   AccessRequest,
   ActivityItem,
@@ -12,7 +12,7 @@ import type {
   Referral,
   ReviewStatus,
   Staff,
-} from "@/lib/types";
+} from "./types.ts";
 
 /** helper: a Date relative to the workspace clock (17 Nov 2026) */
 const d = (dayOffset: number, h: number, m = 0) => new Date(2026, 10, 17 + dayOffset, h, m, 0);
