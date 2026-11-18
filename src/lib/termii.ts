@@ -47,7 +47,8 @@ export async function sendSms(e164: string, message: string): Promise<void> {
 }
 
 export function otpMessage(code: string): string {
-  return `${code} is your AfriDetect Mat verification code. It expires in 5 minutes. Never share it.`;
+  // Wording must match the approved Termii sender sample, or delivery gets blocked.
+  return `Your AfriDetect Mat verification code is ${code}. It expires in 10 minutes. Do not share it with anyone.`;
 }
 
 export async function sendOtp(e164: string, code: string): Promise<void> {
