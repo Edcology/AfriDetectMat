@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth/server";
 import { clock, gestationalAge, relativeDay } from "@/lib/format";
 import { MOTHER_SLUG } from "@/lib/mother-data";
 import { getDb } from "@/lib/store";
@@ -9,6 +10,10 @@ import { getDb } from "@/lib/store";
  * message. Original scans upload as real files once storage exists.
  */
 export async function GET(request: Request) {
+  // The summary contains clinical data — never serve it to an anonymous caller.
+  const { data } = await auth.getSession();
+  if (!data?.user) return new NextResponse("Sign in to download this record.", { status: 401 });
+
   const url = new URL(request.url);
   const doc = url.searchParams.get("doc") ?? "Antenatal summary";
 
